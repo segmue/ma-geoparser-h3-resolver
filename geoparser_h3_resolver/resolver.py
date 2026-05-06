@@ -25,7 +25,7 @@ from typing import Optional, Union
 import appdirs
 
 from geoparser.modules.resolvers.sentencetransformer import SentenceTransformerResolver
-from h3_spatial_engine import H3Engine
+from h3_multi_resolution_engine import H3Engine
 
 from .sentence_generator import (
     CandidateSentenceGenerator,

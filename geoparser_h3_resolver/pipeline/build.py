@@ -29,7 +29,7 @@ import duckdb
 import pandas as pd
 from shapely import wkb
 
-from h3_spatial_engine import convert_geometry_to_h3, ContainmentMode
+from h3_multi_resolution_engine import convert_geometry_to_h3, ContainmentMode
 
 from .build_config import BuildConfig
 from ..association import compute_all

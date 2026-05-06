@@ -21,7 +21,7 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-from h3_spatial_engine import H3Engine
+from h3_multi_resolution_engine import H3Engine
 
 
 def calculate_npmi(p_a: float, p_b: float, p_ab: float) -> float:

@@ -17,7 +17,7 @@ from .association_loader import AssociationMatrixLoader
 from .templates import SentenceTemplate
 
 if TYPE_CHECKING:
-    from h3_spatial_engine import H3Engine
+    from h3_multi_resolution_engine import H3Engine
 
 
 @dataclass
@@ -65,7 +65,7 @@ class CandidateSentenceGenerator:
     5. Satz aus Template bauen
 
     Example:
-        from h3_spatial_engine import H3Engine
+        from h3_multi_resolution_engine import H3Engine
         from geoparser_h3_resolver.sentence_generator import CandidateSentenceGenerator, FeatureInput
 
         engine = H3Engine("data/spatial_h3.duckdb")
