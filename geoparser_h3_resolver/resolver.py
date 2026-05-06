@@ -80,7 +80,7 @@ class SpatialSentenceResolver(SentenceTransformerResolver):
             attribute_map=attribute_map,
         )
 
-        base_dir = Path(appdirs.user_data_dir("geoparser"))
+        base_dir = Path(appdirs.user_data_dir("geoparser", ""))
 
         # Lade BuildConfig wenn config_path angegeben, sonst bundled Default
         if config_path is not None:

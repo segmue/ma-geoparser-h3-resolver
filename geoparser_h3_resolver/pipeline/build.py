@@ -36,8 +36,12 @@ from ..association import compute_all
 
 
 def _get_geoparser_db_path() -> Path:
-    """Findet Geoparsers Datenbank-Pfad via appdirs."""
-    data_dir = Path(appdirs.user_data_dir("geoparser"))
+    """Findet Geoparsers Datenbank-Pfad via appdirs.
+
+    Verwendet user_data_dir('geoparser', '') mit leerem appauthor,
+    identisch zu geoparser selbst (geoparser/db/db.py).
+    """
+    data_dir = Path(appdirs.user_data_dir("geoparser", ""))
     db_path = data_dir / "geoparser.db"
     if not db_path.exists():
         raise FileNotFoundError(
@@ -286,7 +290,7 @@ def build(
     else:
         gazetteer_db_path = Path(gazetteer_db_path)
 
-    base_dir = Path(appdirs.user_data_dir("geoparser"))
+    base_dir = Path(appdirs.user_data_dir("geoparser", ""))
     base_dir.mkdir(parents=True, exist_ok=True)
 
     if output_path is None:
