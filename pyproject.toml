@@ -9,7 +9,7 @@ include = ["geoparser_h3_resolver/configs/*.yaml"]
 [tool.poetry.dependencies]
 python = ">=3.11,<3.14"
 geoparser = {git = "https://github.com/dguzh/geoparser.git"}
-h3-multi-resolution-index = {path = "../h3-multi-resolution-index", develop = true}
+h3-multi-resolution-index = {git = "https://github.com/segmue/ma-h3-multi-resolution-engine.git"}
 appdirs = "^1.4.4"
 pandas = "^2.0"
 numpy = "^1.24"
