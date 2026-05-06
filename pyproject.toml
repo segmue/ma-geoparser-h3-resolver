@@ -1,0 +1,26 @@
+[tool.poetry]
+name = "geoparser-h3-resolver"
+version = "0.1.0"
+description = "H3 spatial sentence resolver plugin for geoparser"
+authors = ["Sebastian Gmur"]
+packages = [{include = "geoparser_h3_resolver"}]
+include = ["geoparser_h3_resolver/configs/*.yaml"]
+
+[tool.poetry.dependencies]
+python = ">=3.11,<3.14"
+geoparser = {git = "https://github.com/dguzh/geoparser.git"}
+h3-spatial-engine = {path = "../h3-spatial-engine", develop = true}
+appdirs = "^1.4.4"
+pandas = "^2.0"
+numpy = "^1.24"
+pyyaml = "^6.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0.0"
+
+[tool.poetry.scripts]
+spatial-h3-build = "geoparser_h3_resolver.pipeline.build:main"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

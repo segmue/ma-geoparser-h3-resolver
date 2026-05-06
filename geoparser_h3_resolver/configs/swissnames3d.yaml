@@ -1,0 +1,53 @@
+# =============================================================================
+# geoparser-h3-resolver -- Konfiguration fuer swissnames3d
+# =============================================================================
+# Die Geoparser-DB wird als Single Source of Truth behandelt: alle registrierten
+# Sources (swissNAMES3D + swissBOUNDARIES3D) werden automatisch gelesen.
+# Keine Tabellennamen oder Spalten-Mappings noetig.
+# =============================================================================
+
+# Geoparser-Gazetteer dem diese Config entspricht
+gazetteer: swissnames3d
+
+# CRS der Geometrien in der Geoparser-DB (EPSG-Code)
+source_crs: 2056
+
+# -----------------------------------------------------------------------------
+# H3 Konvertierungsparameter
+# -----------------------------------------------------------------------------
+target_cells: 100
+min_resolution: 5
+max_resolution: 13
+containment_mode: overlap
+
+# -----------------------------------------------------------------------------
+# Static Slots: feste Slots im generierten Satz nach OBJEKTART
+# -----------------------------------------------------------------------------
+# OBJEKTART-Werte stammen direkt aus der Geoparser-DB.
+# Verifiziert: HOHEITSGEBIET hat Gemeindegebiet/Kantonsgebiet/Kommunanz,
+#              BEZIRKSGEBIET hat Bezirk, KANTONSGEBIET hat Kanton.
+static_slots:
+  - objektart: Gemeindegebiet
+    label: Gemeinde
+    slots: 2
+  - objektart: Bezirk
+    label: Bezirk
+    slots: 1
+  - objektart: Kanton
+    label: Kanton
+    slots: 1
+
+# -----------------------------------------------------------------------------
+# Sentence Generator Parameter
+# -----------------------------------------------------------------------------
+sentence_generator:
+  assoc_threshold: 0.001
+  max_slots: 10
+  max_slots_per_category: 5
+  max_categories: 10
+  max_filler_slots: 0
+
+# -----------------------------------------------------------------------------
+# Output
+# -----------------------------------------------------------------------------
+output_file: spatial_h3.duckdb
