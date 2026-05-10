@@ -24,7 +24,6 @@ import sqlite3
 from pathlib import Path
 from typing import Optional, Union
 
-import appdirs
 import duckdb
 import pandas as pd
 from shapely import wkb
@@ -36,13 +35,9 @@ from ..association import compute_all
 
 
 def _get_geoparser_db_path() -> Path:
-    """Findet Geoparsers Datenbank-Pfad via appdirs.
-
-    Verwendet user_data_dir('geoparser', '') mit leerem appauthor,
-    identisch zu geoparser selbst (geoparser/db/db.py).
-    """
-    data_dir = Path(appdirs.user_data_dir("geoparser", ""))
-    db_path = data_dir / "geoparser.db"
+    """Findet Geoparsers Datenbank-Pfad via geoparser's eigener Konfiguration."""
+    from geoparser.db.db import DATABASE_URL
+    db_path = Path(DATABASE_URL.replace("sqlite:///", ""))
     if not db_path.exists():
         raise FileNotFoundError(
             f"Geoparser-Datenbank nicht gefunden: {db_path}\n"
@@ -290,7 +285,8 @@ def build(
     else:
         gazetteer_db_path = Path(gazetteer_db_path)
 
-    base_dir = Path(appdirs.user_data_dir("geoparser", ""))
+    from geoparser.db.db import DATABASE_URL as _GEOPARSER_DATABASE_URL
+    base_dir = Path(_GEOPARSER_DATABASE_URL.replace("sqlite:///", "")).parent
     base_dir.mkdir(parents=True, exist_ok=True)
 
     if output_path is None:

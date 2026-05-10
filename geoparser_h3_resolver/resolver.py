@@ -22,7 +22,6 @@ Verwendung:
 from pathlib import Path
 from typing import Optional, Union
 
-import appdirs
 
 from geoparser.modules.resolvers.sentencetransformer import SentenceTransformerResolver
 from h3_multi_resolution_engine import H3Engine
@@ -80,7 +79,8 @@ class SpatialSentenceResolver(SentenceTransformerResolver):
             attribute_map=attribute_map,
         )
 
-        base_dir = Path(appdirs.user_data_dir("geoparser", ""))
+        from geoparser.db.db import DATABASE_URL as _GEOPARSER_DATABASE_URL
+        base_dir = Path(_GEOPARSER_DATABASE_URL.replace("sqlite:///", "")).parent
 
         # Lade BuildConfig wenn config_path angegeben, sonst bundled Default
         if config_path is not None:
@@ -150,5 +150,5 @@ class SpatialSentenceResolver(SentenceTransformerResolver):
     @staticmethod
     def _default_duckdb_path() -> Path:
         """Standard-Pfad: im selben Verzeichnis wie geoparser's Daten."""
-        data_dir = Path(appdirs.user_data_dir("geoparser"))
-        return data_dir / "spatial_h3.duckdb"
+        from geoparser.db.db import DATABASE_URL as _GEOPARSER_DATABASE_URL
+        return Path(_GEOPARSER_DATABASE_URL.replace("sqlite:///", "")).parent / "spatial_h3.duckdb"

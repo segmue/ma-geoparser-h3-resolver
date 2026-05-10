@@ -87,6 +87,7 @@ class CandidateSentenceGenerator:
         matrix_path = self.config.get_matrix_path()
         self._assoc_loader = AssociationMatrixLoader(matrix_path)
         self._template = SentenceTemplate(self.config)
+        self._cache: Dict[int, GeneratedSentence] = {}
 
     # -------------------------------------------------------------------------
     # Public API
@@ -95,12 +96,19 @@ class CandidateSentenceGenerator:
     def generate(self, feature: FeatureInput) -> GeneratedSentence:
         """Generiert einen beschreibenden Satz fuer ein einzelnes Feature.
 
+        Ergebnisse werden pro feature_id gecacht — wiederholte Aufrufe fuer
+        dasselbe Feature (z.B. als Kandidat fuer verschiedene Toponyme)
+        ueberspringen die DuckDB-Queries.
+
         Args:
             feature: Das Quell-Feature
 
         Returns:
             GeneratedSentence mit Satz und Kontext-Informationen
         """
+        if feature.feature_id in self._cache:
+            return self._cache[feature.feature_id]
+
         # Phase 1: Static Context
         static_context = self._find_static_context(feature.feature_id)
 
@@ -116,7 +124,7 @@ class CandidateSentenceGenerator:
             static_context=static_context,
         )
 
-        return GeneratedSentence(
+        result = GeneratedSentence(
             feature_id=feature.feature_id,
             sentence=sentence,
             static_context=static_context,
@@ -124,6 +132,8 @@ class CandidateSentenceGenerator:
             filler_by_category=filler_by_category,
             categories_used=list(context_by_category.keys()),
         )
+        self._cache[feature.feature_id] = result
+        return result
 
     def generate_batch(
         self,
