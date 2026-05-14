@@ -56,7 +56,7 @@ class SentenceGeneratorConfig:
     matrix_path: Optional[Path] = None
 
     # Template settings
-    category_separator: str = "; "
+    category_separator: str = ", "
     instance_separator: str = ", "
 
     def get_matrix_path(self) -> Path:

@@ -1,11 +1,11 @@
 """
 Satz-Templates und Formatierung.
 
-Format mit Static Context:
-    {OBJEKTART} "{NAME}" in {Static1} ({Label1}), {Static2} ({Label2}). Bei {Inst1} ({Kat1}); ...
+Format:
+    {NAME}, {OBJEKTART}, bei {Inst1} und {Inst2}, {Kat1}, {Inst3}, {Kat2}, in {Static1}, {Label1}, {Static2}, {Label2}
 
 Beispiel:
-    Alpiner Gipfel "Matterhorn" in Zermatt (Gemeinde), Wallis (Kanton). Bei Zmuttgrat (Grat); Theodulstrasse (Strasse)
+    Matterhorn, Alpiner Gipfel, bei Zmuttgrat und Hoernligrat, Grat, Theodulstrasse, Strasse, in Zermatt, Gemeinde, Wallis, Kanton
 """
 
 from typing import Dict, List, Optional, TYPE_CHECKING
@@ -24,10 +24,10 @@ class SentenceTemplate:
         """Formatiert das Haupt-Feature.
 
         Returns:
-            Formatierter String wie 'Alpiner Gipfel "Matterhorn"'
+            Formatierter String wie 'Matterhorn, Alpiner Gipfel'
         """
         if name:
-            return f'{objektart} "{name}"'
+            return f"{name}, {objektart}"
         return objektart
 
     def format_category_group(
@@ -38,13 +38,20 @@ class SentenceTemplate:
         """Formatiert eine Gruppe von Instanzen einer Kategorie.
 
         Returns:
-            Formatierter String wie 'Zmuttgrat, Hoernligrat (Grat)'
+            Formatierter String wie 'Zmuttgrat und Hoernligrat, Grat'
         """
         if not instance_names:
             return ""
 
-        names_str = self.config.instance_separator.join(instance_names)
-        return f"{names_str} ({objektart})"
+        if len(instance_names) == 1:
+            names_str = instance_names[0]
+        else:
+            names_str = (
+                self.config.instance_separator.join(instance_names[:-1])
+                + " und "
+                + instance_names[-1]
+            )
+        return f"{names_str}, {objektart}"
 
     def build_sentence(
         self,
@@ -66,7 +73,7 @@ class SentenceTemplate:
         """
         feature_part = self.format_feature(name, objektart)
 
-        parts = []
+        parts = [feature_part]
 
         # 1. Assoziations-basierter Kontext
         if context_by_category:
@@ -95,11 +102,8 @@ class SentenceTemplate:
             static_items = []
             for label, names in static_context.items():
                 for n in names:
-                    static_items.append(f"{n} ({label})")
+                    static_items.append(f"{n}, {label}")
             if static_items:
                 parts.append("in " + self.config.instance_separator.join(static_items))
 
-        if not parts:
-            return feature_part
-
-        return feature_part + " " + ". ".join(parts)
+        return self.config.category_separator.join(parts)
