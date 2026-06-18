@@ -217,21 +217,26 @@ def _create_duckdb(output_path: Path, all_features: pd.DataFrame) -> None:
         )
     """)
 
-    for _, row in all_features.iterrows():
-        conn.execute("""
-            INSERT INTO features (feature_id, UUID, NAME, OBJEKTART, source,
-                                  h3_cells, h3_resolution, h3_cell_count)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, [
-            row["feature_id"],
-            row.get("UUID"),
-            row.get("NAME"),
-            row.get("OBJEKTART"),
-            row.get("source"),
-            row["h3_cells_uint"],
-            row["h3_resolution"],
-            row["h3_cell_count"],
-        ])
+    # Set-basierter Bulk-Insert statt zeilenweisem INSERT (~150k Einzelqueries).
+    insert_df = pd.DataFrame({
+        "feature_id": all_features["feature_id"],
+        "UUID": all_features["UUID"] if "UUID" in all_features else None,
+        "NAME": all_features["NAME"] if "NAME" in all_features else None,
+        "OBJEKTART": all_features["OBJEKTART"] if "OBJEKTART" in all_features else None,
+        "source": all_features["source"] if "source" in all_features else None,
+        "h3_cells": all_features["h3_cells_uint"],
+        "h3_resolution": all_features["h3_resolution"],
+        "h3_cell_count": all_features["h3_cell_count"],
+    })
+    conn.register("features_df", insert_df)
+    conn.execute("""
+        INSERT INTO features (feature_id, UUID, NAME, OBJEKTART, source,
+                              h3_cells, h3_resolution, h3_cell_count)
+        SELECT feature_id, UUID, NAME, OBJEKTART, source,
+               CAST(h3_cells AS UBIGINT[]), h3_resolution, h3_cell_count
+        FROM features_df
+    """)
+    conn.unregister("features_df")
 
     print("  Erstelle h3_lookup Index...")
     conn.execute("""
