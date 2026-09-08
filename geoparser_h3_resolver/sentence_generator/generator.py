@@ -12,6 +12,7 @@ Beispiel-Output:
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple, TYPE_CHECKING
 
+from .allocation import allocate
 from .config import SentenceGeneratorConfig
 from .association_loader import AssociationMatrixLoader
 from .templates import SentenceTemplate
@@ -215,27 +216,36 @@ class CandidateSentenceGenerator:
             except Exception:
                 results_df = None
 
-            # 3. Ergebnisse befuellen + ungenutzte Slots umverteilen
+            # 3. Slots vergeben (Strategie: config.slot_allocation), dann befuellen
             if results_df is not None and not results_df.empty:
-                remaining_slots = self.config.max_slots
-                max_per_cat = self.config.max_slots_per_category
                 uuid_field = self.config.uuid_field
 
+                by_cat = {}
+                available = {}
                 for objektart, _ in associated:
-                    if remaining_slots <= 0:
-                        break
-                    slots = min(max_per_cat, remaining_slots)
+                    cat_df = results_df[results_df["OBJEKTART"] == objektart]
+                    by_cat[objektart] = cat_df
+                    available[objektart] = 0 if cat_df.empty else len(cat_df[uuid_field].unique())
 
-                    mask = results_df["OBJEKTART"] == objektart
-                    cat_df = results_df[mask]
-                    if not cat_df.empty:
-                        unique_uuids = cat_df[uuid_field].unique()[:slots]
-                        selected = cat_df[cat_df[uuid_field].isin(unique_uuids)]
-                        names = selected["NAME"].tolist()
-                        if names:
-                            context_by_category[objektart] = names
-                            used_feature_ids.extend(selected["feature_id"].tolist())
-                            remaining_slots -= len(unique_uuids)
+                slots_by_cat = allocate(
+                    associated,
+                    available,
+                    self.config.max_slots,
+                    self.config.max_slots_per_category,
+                    mode=self.config.slot_allocation,
+                )
+
+                for objektart, _ in associated:
+                    n = slots_by_cat.get(objektart, 0)
+                    if n <= 0:
+                        continue
+                    cat_df = by_cat[objektart]
+                    unique_uuids = cat_df[uuid_field].unique()[:n]
+                    selected = cat_df[cat_df[uuid_field].isin(unique_uuids)]
+                    names = selected["NAME"].tolist()
+                    if names:
+                        context_by_category[objektart] = names
+                        used_feature_ids.extend(selected["feature_id"].tolist())
 
         # 4. Verbleibende Slots mit kleinsten intersecting Features auffuellen
         filler_by_category: Dict[str, List[str]] = {}
@@ -273,25 +283,26 @@ class CandidateSentenceGenerator:
 
     def _allocate_slots(
         self,
-        associated: List[Tuple[str, float]]
+        associated: List[Tuple[str, float]],
+        available: Optional[Dict[str, int]] = None,
     ) -> Dict[str, int]:
-        """Verteilt Instanz-Slots proportional nach Assoziationsstaerke."""
-        if not associated:
-            return {}
+        """Slot-Vergabe nach der konfigurierten Strategie.
 
-        total_slots = self.config.max_slots
-        max_per_cat = self.config.max_slots_per_category
-
-        total_weight = sum(b1 for _, b1 in associated)
-        if total_weight <= 0:
-            return {}
-
-        allocation = {}
-        for cat, b1 in associated:
-            raw = (b1 / total_weight) * total_slots
-            allocation[cat] = min(max_per_cat, max(0, int(round(raw))))
-
-        return allocation
+        Duenner Wrapper um allocation.allocate; die eigentliche Logik und ihre
+        Tests liegen dort. `available` ist die Zahl tatsaechlich vorhandener
+        Instanzen je Kategorie; ohne Angabe wird unbegrenzte Verfuegbarkeit
+        angenommen (nur fuer Inspektion/Debugging sinnvoll).
+        """
+        if available is None:
+            available = {cat: self.config.max_slots_per_category
+                         for cat, _ in associated}
+        return allocate(
+            associated,
+            available,
+            self.config.max_slots,
+            self.config.max_slots_per_category,
+            mode=self.config.slot_allocation,
+        )
 
     def get_available_categories(self) -> List[str]:
         """Gibt alle verfuegbaren OBJEKTART-Kategorien zurueck."""

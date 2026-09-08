@@ -33,6 +33,10 @@ class SentenceGeneratorConfig:
         max_slots: Maximale Anzahl Slots (distinct UUIDs) im Satz gesamt
         max_slots_per_category: Maximale Slots (distinct UUIDs) pro Kategorie
         max_categories: Maximale Anzahl Kategorien zu beruecksichtigen
+        slot_allocation: Strategie der Slot-Vergabe auf die assoziierten
+            Kategorien — 'greedy' (Default, bisheriges Verhalten: obere
+            Kategorien zuerst bis zum Budget) oder 'proportional' (Anteile
+            nach Assoziationsgewicht, siehe allocation.py)
         static_slots: Liste von festen Slots (nach OBJEKTART)
         matrix_path: Pfad zur B1 Matrix CSV (optional)
         category_separator: Trennzeichen zwischen Kategorien im Satz
@@ -47,6 +51,7 @@ class SentenceGeneratorConfig:
     max_slots_per_category: int = 5
     max_categories: int = 10
     max_filler_slots: int = 0
+    slot_allocation: str = "greedy"
 
     # Static slots (ersetzt static_datasets)
     static_slots: List[StaticSlotConfig] = field(default_factory=list)

@@ -59,6 +59,7 @@ class BuildConfig:
     max_slots_per_category: int = 5
     max_categories: int = 10
     max_filler_slots: int = 0
+    slot_allocation: str = "greedy"
 
     # -------------------------------------------------------------------------
     # Factory Methods
@@ -117,6 +118,7 @@ class BuildConfig:
             max_slots_per_category=sg.get("max_slots_per_category", 5),
             max_categories=sg.get("max_categories", 10),
             max_filler_slots=sg.get("max_filler_slots", 0),
+            slot_allocation=sg.get("slot_allocation", "greedy"),
         )
 
     # -------------------------------------------------------------------------
@@ -135,6 +137,7 @@ class BuildConfig:
             max_slots_per_category=self.max_slots_per_category,
             max_categories=self.max_categories,
             max_filler_slots=self.max_filler_slots,
+            slot_allocation=self.slot_allocation,
         )
 
     def resolve_output_path(self, base_dir: Path) -> Path:
