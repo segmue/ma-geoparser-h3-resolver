@@ -74,7 +74,7 @@ class BatchSentenceGenerator:
                     max_categories=cfg.max_categories,
                 )
                 assoc_by_objektart[f.objektart] = [
-                    (cat, b1) for cat, b1 in associated
+                    (cat, weight) for cat, weight in associated
                     if cat not in exclude_objektarts
                 ]
 

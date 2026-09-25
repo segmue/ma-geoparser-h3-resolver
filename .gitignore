@@ -28,3 +28,6 @@ poetry.lock
 .pytest_cache/
 htmlcov/
 .coverage
+
+# DuckDB-Spill
+.tmp/

@@ -3,6 +3,7 @@ BuildConfig - Konfiguration fuer die geoparser-h3-resolver Build-Pipeline.
 
 Liest eine config.yaml und stellt alle Parameter fuer:
   - H3-Konvertierung (target_cells, resolution, containment_mode)
+  - Assoziation (Mass B1 oder D1, deren Rechenparameter, Matrixpfad)
   - Static Slots (OBJEKTART-basierte feste Slots im Satz)
   - Sentence Generator (assoc_threshold, max_slots, etc.)
   - Output (DuckDB-Pfad)
@@ -22,6 +23,14 @@ import yaml
 if TYPE_CHECKING:
     from ..sentence_generator import SentenceGeneratorConfig
 
+from ..association.measures import (
+    B1,
+    B1Params,
+    D1,
+    D1Params,
+    VALID_MEASURES,
+    matrix_filename,
+)
 from ..sentence_generator.config import StaticSlotConfig
 
 # Pfad zum bundled configs-Verzeichnis
@@ -50,6 +59,13 @@ class BuildConfig:
     containment_mode: str = "overlap"
     output_file: str = "spatial_h3.duckdb"
 
+    # Assoziation: welches Mass der Resolver liest und womit es gerechnet wird.
+    # "b1" (Ueberlagerungsmass, Default) oder "d1" (Adjazenzmass).
+    association_measure: str = B1
+    matrix_path: Optional[str] = None
+    b1: B1Params = field(default_factory=B1Params)
+    d1: D1Params = field(default_factory=D1Params)
+
     # Static Slots: welche OBJEKTARTs feste Slots im Satz bekommen
     static_slots: List[StaticSlotConfig] = field(default_factory=list)
 
@@ -60,6 +76,13 @@ class BuildConfig:
     max_categories: int = 10
     max_filler_slots: int = 0
     slot_allocation: str = "greedy"
+
+    def __post_init__(self):
+        if self.association_measure not in VALID_MEASURES:
+            raise ValueError(
+                f"Unbekanntes Assoziationsmass '{self.association_measure}' "
+                f"(erlaubt: {VALID_MEASURES})"
+            )
 
     # -------------------------------------------------------------------------
     # Factory Methods
@@ -103,6 +126,7 @@ class BuildConfig:
         ]
 
         sg = raw.get("sentence_generator", {})
+        assoc = raw.get("association", {}) or {}
 
         return cls(
             gazetteer=raw.get("gazetteer", ""),
@@ -112,6 +136,10 @@ class BuildConfig:
             max_resolution=raw.get("max_resolution", 13),
             containment_mode=raw.get("containment_mode", "overlap"),
             output_file=raw.get("output_file", "spatial_h3.duckdb"),
+            association_measure=assoc.get("measure", B1),
+            matrix_path=assoc.get("matrix_path"),
+            b1=_params_from_dict(B1Params, assoc.get("b1", {}), "association.b1"),
+            d1=_params_from_dict(D1Params, assoc.get("d1", {}), "association.d1"),
             static_slots=static_slots,
             assoc_threshold=sg.get("assoc_threshold", 0.001),
             max_slots=sg.get("max_slots", 10),
@@ -125,6 +153,25 @@ class BuildConfig:
     # Convenience
     # -------------------------------------------------------------------------
 
+    def measure_params(self):
+        """Parameterobjekt des konfigurierten Masses (B1Params oder D1Params)."""
+        return self.d1 if self.association_measure == D1 else self.b1
+
+    def matrix_filename(self) -> str:
+        """Dateiname der Matrix des konfigurierten Masses."""
+        return matrix_filename(self.association_measure)
+
+    def resolve_matrix_path(self, base_dir: Path) -> Path:
+        """Pfad zur Assoziationsmatrix.
+
+        Ein explizit gesetzter `association.matrix_path` schlaegt das Mass;
+        sonst liegt die Matrix als <measure>_matrix.csv neben der DuckDB.
+        """
+        if self.matrix_path:
+            p = Path(self.matrix_path)
+            return p if p.is_absolute() else Path(base_dir) / p
+        return Path(base_dir) / self.matrix_filename()
+
     def to_sentence_generator_config(self, matrix_path: Path) -> "SentenceGeneratorConfig":
         """Konvertiert zu SentenceGeneratorConfig fuer den Sentence Generator."""
         from ..sentence_generator import SentenceGeneratorConfig
@@ -132,6 +179,7 @@ class BuildConfig:
         return SentenceGeneratorConfig(
             static_slots=list(self.static_slots),
             matrix_path=matrix_path,
+            measure=self.association_measure,
             assoc_threshold=self.assoc_threshold,
             max_slots=self.max_slots,
             max_slots_per_category=self.max_slots_per_category,
@@ -146,3 +194,20 @@ class BuildConfig:
         if p.is_absolute():
             return p
         return base_dir / p
+
+
+def _params_from_dict(cls, raw: dict, where: str):
+    """Baut ein Parameter-Dataclass aus einem YAML-Teilbaum.
+
+    Unbekannte Schluessel werden gemeldet statt stillschweigend verworfen — ein
+    vertipptes `r_star` wuerde sonst unbemerkt den Default weiterlaufen lassen.
+    """
+    raw = raw or {}
+    known = {f for f in cls.__dataclass_fields__}
+    unknown = sorted(set(raw) - known)
+    if unknown:
+        raise ValueError(
+            f"Unbekannte Schluessel in {where}: {unknown} "
+            f"(erlaubt: {sorted(known)})"
+        )
+    return cls(**raw)

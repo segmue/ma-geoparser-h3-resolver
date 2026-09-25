@@ -3,23 +3,29 @@ name = "geoparser-h3-resolver"
 version = "0.1.0"
 description = "H3 spatial sentence resolver plugin for geoparser"
 authors = ["Sebastian Gmur"]
+readme = "README.md"
 packages = [{include = "geoparser_h3_resolver"}]
 include = ["geoparser_h3_resolver/configs/*.yaml"]
 
 [tool.poetry.dependencies]
 python = ">=3.11,<3.14"
-geoparser = {git = "https://github.com/dguzh/geoparser.git"}
-h3-multi-resolution-index = {path = "../h3-multi-resolution-index", develop = true}
+geoparser = "0.3.1"
+h3-multi-resolution-engine = {git = "https://github.com/segmue/ma-h3-multi-resolution-engine.git", rev = "23fe41b62a5cddd175bd791288a82e39a567b113"}
 appdirs = "^1.4.4"
 pandas = "^2.0"
 numpy = ">=1.24"
 pyyaml = "^6.0"
+# D1 rechnet direkt auf DuckDB und h3-py; bisher kamen beide nur transitiv mit.
+duckdb = "^1.2"
+h3 = "^4.0"
+pyarrow = ">=14.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"
 
 [tool.poetry.scripts]
 spatial-h3-build = "geoparser_h3_resolver.pipeline.build:main"
+spatial-h3-assoc = "geoparser_h3_resolver.pipeline.assoc_cli:main"
 
 [build-system]
 requires = ["poetry-core"]

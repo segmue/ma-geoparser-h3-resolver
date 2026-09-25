@@ -5,7 +5,7 @@ Format:
     {NAME}, {OBJEKTART}, bei {Inst1} und {Inst2}, {Kat1}, {Inst3}, {Kat2}, in {Static1}, {Label1}, {Static2}, {Label2}
 
 Beispiel:
-    Matterhorn, Alpiner Gipfel, bei Zmuttgrat und Hoernligrat, Grat, Theodulstrasse, Strasse, in Zermatt, Gemeinde, Wallis, Kanton
+    Säntis, Alpiner Gipfel, bei Alpstein, Massiv, Flis und Säntis-Nordwand, Gebiet, Obertoggenburg und Toggenburg, Landschaftsname, in Schwende-Rüte, Gemeinde, Hundwil, Gemeinde, Hinterland, Bezirk, Appenzell Ausserrhoden, Kanton
 """
 
 from typing import Dict, List, Optional, TYPE_CHECKING
@@ -24,7 +24,7 @@ class SentenceTemplate:
         """Formatiert das Haupt-Feature.
 
         Returns:
-            Formatierter String wie 'Matterhorn, Alpiner Gipfel'
+            Formatierter String wie 'Säntis, Alpiner Gipfel'
         """
         if name:
             return f"{name}, {objektart}"
@@ -38,7 +38,7 @@ class SentenceTemplate:
         """Formatiert eine Gruppe von Instanzen einer Kategorie.
 
         Returns:
-            Formatierter String wie 'Zmuttgrat und Hoernligrat, Grat'
+            Formatierter String wie 'Flis und Säntis-Nordwand, Gebiet'
         """
         if not instance_names:
             return ""
