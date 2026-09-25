@@ -1,5 +1,5 @@
 """
-Build-Pipeline: Geoparser SpatiaLite DB -> H3 DuckDB + B1 Matrix.
+Build-Pipeline: Geoparser SpatiaLite DB -> H3 DuckDB + Assoziationsmatrix.
 
 Liest ALLE registrierten Features aus der Geoparser-DB (auto-discovery via
 source/gazetteer Metadaten), konvertiert zu H3 Cells, speichert in DuckDB
@@ -339,14 +339,30 @@ def build(
     print(f"\nStep 3: Erstelle DuckDB...")
     _create_duckdb(output_path, all_features)
 
-    # Step 4: Spatial Associations berechnen
-    print(f"\nStep 4: Berechne Spatial Associations...")
-    compute_all(db_path=str(output_path), output_dir=str(matrix_dir))
+    # Step 4: Spatial Associations berechnen.
+    # Gerechnet wird hier immer B1 (Ueberlagerungsmass) — es ist das Default-Mass
+    # und faellt im Rahmen des Builds kaum ins Gewicht. Das Adjazenzmass D1
+    # laeuft ueber den eigenen Befehl 'spatial-h3-assoc --measure d1'.
+    print(f"\nStep 4: Berechne Spatial Associations (B1 + NPMI)...")
+    compute_all(
+        db_path=str(output_path),
+        total_area_resolution=build_config.b1.total_area_resolution,
+        output_dir=str(matrix_dir),
+    )
+
+    matrix_path = build_config.resolve_matrix_path(matrix_dir)
 
     print("\n" + "=" * 60)
     print("Build abgeschlossen!")
     print(f"  DuckDB:     {output_path}")
     print(f"  B1 Matrix:  {matrix_dir / 'b1_matrix.csv'}")
+    print(f"  Mass:       {build_config.association_measure} -> {matrix_path}")
+    if not matrix_path.exists():
+        print()
+        print(f"  HINWEIS: Die Matrix des konfigurierten Masses "
+              f"'{build_config.association_measure}' fehlt noch.")
+        print(f"  Sie entsteht mit:  spatial-h3-assoc --measure "
+              f"{build_config.association_measure} --db {output_path}")
     print("=" * 60)
 
     return output_path

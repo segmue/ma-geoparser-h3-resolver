@@ -14,6 +14,7 @@ Einschraenkung: Configs mit max_filler_slots > 0 werden nicht gebatcht
 
 from typing import Dict, List, Tuple
 
+from .allocation import allocate
 from .generator import CandidateSentenceGenerator, FeatureInput, GeneratedSentence
 
 
@@ -73,7 +74,7 @@ class BatchSentenceGenerator:
                     max_categories=cfg.max_categories,
                 )
                 assoc_by_objektart[f.objektart] = [
-                    (cat, b1) for cat, b1 in associated
+                    (cat, weight) for cat, weight in associated
                     if cat not in exclude_objektarts
                 ]
 
@@ -129,22 +130,32 @@ class BatchSentenceGenerator:
         CandidateSentenceGenerator._find_dynamic_context (Schritt 3)."""
         cfg = self.g.config
         context_by_category: Dict[str, List[str]] = {}
-        remaining_slots = cfg.max_slots
-        max_per_cat = cfg.max_slots_per_category
         uuid_field = cfg.uuid_field
 
+        by_cat = {}
+        available: Dict[str, int] = {}
         for objektart, _ in associated:
-            if remaining_slots <= 0:
-                break
-            slots = min(max_per_cat, remaining_slots)
-
             cat_df = results_df[results_df["OBJEKTART"] == objektart]
-            if not cat_df.empty:
-                unique_uuids = cat_df[uuid_field].unique()[:slots]
-                selected = cat_df[cat_df[uuid_field].isin(unique_uuids)]
-                names = selected["NAME"].tolist()
-                if names:
-                    context_by_category[objektart] = names
-                    remaining_slots -= len(unique_uuids)
+            by_cat[objektart] = cat_df
+            available[objektart] = 0 if cat_df.empty else len(cat_df[uuid_field].unique())
+
+        slots_by_cat = allocate(
+            associated,
+            available,
+            cfg.max_slots,
+            cfg.max_slots_per_category,
+            mode=cfg.slot_allocation,
+        )
+
+        for objektart, _ in associated:
+            n = slots_by_cat.get(objektart, 0)
+            if n <= 0:
+                continue
+            cat_df = by_cat[objektart]
+            unique_uuids = cat_df[uuid_field].unique()[:n]
+            selected = cat_df[cat_df[uuid_field].isin(unique_uuids)]
+            names = selected["NAME"].tolist()
+            if names:
+                context_by_category[objektart] = names
 
         return context_by_category

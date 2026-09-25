@@ -1,5 +1,11 @@
 """
-Laden und Cachen der B1 Association Matrix.
+Laden und Cachen der Assoziationsmatrix.
+
+Welches Mass in der Datei steht — B1 (Ueberlagerungsmass) oder D1
+(Adjazenzmass) — ist hier gleichgueltig: beide haben dasselbe Format
+(quadratisch, `;`-separiert, OBJEKTART als Index und Kopfzeile, Zeile =
+Quellkategorie) und werden gleich gelesen. Die Auswahl trifft die Config ueber
+den Pfad.
 """
 
 from pathlib import Path
@@ -9,7 +15,7 @@ import pandas as pd
 
 
 class AssociationMatrixLoader:
-    """Laedt und cached die B1 Association Matrix.
+    """Laedt und cached die Assoziationsmatrix.
 
     Die Matrix wird lazy geladen beim ersten Zugriff und dann im Speicher
     gehalten fuer schnelle wiederholte Abfragen.
@@ -23,22 +29,26 @@ class AssociationMatrixLoader:
         Initialisiert den Loader.
 
         Args:
-            matrix_path: Pfad zur B1 Matrix CSV Datei
+            matrix_path: Pfad zur Matrix-CSV (b1_matrix.csv oder d1_matrix.csv)
         """
         self._matrix_path = Path(matrix_path)
         self._matrix: Optional[pd.DataFrame] = None
 
     @property
     def matrix(self) -> pd.DataFrame:
-        """Lazy-Load der B1 Matrix."""
+        """Lazy-Load der Matrix."""
         if self._matrix is None:
             self._matrix = self._load_matrix()
         return self._matrix
 
     def _load_matrix(self) -> pd.DataFrame:
-        """Laedt die B1 Matrix aus CSV (Semicolon-separiert)."""
+        """Laedt die Matrix aus CSV (Semicolon-separiert)."""
         if not self._matrix_path.exists():
-            raise FileNotFoundError(f"B1 Matrix nicht gefunden: {self._matrix_path}")
+            raise FileNotFoundError(
+                f"Assoziationsmatrix nicht gefunden: {self._matrix_path}\n"
+                "b1_matrix.csv entsteht bei 'spatial-h3-build', "
+                "d1_matrix.csv bei 'spatial-h3-assoc --measure d1'."
+            )
 
         encodings = ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1']
 
@@ -69,15 +79,18 @@ class AssociationMatrixLoader:
         threshold: float,
         max_categories: int
     ) -> List[Tuple[str, float]]:
-        """Gibt assoziierte Kategorien zurueck, sortiert nach B1-Wert.
+        """Gibt assoziierte Kategorien zurueck, sortiert nach Assoziationswert.
+
+        Der Schwellwert wirkt vor der Sortierung, die Kappung danach: beide
+        aendern die Laenge der Liste, nie die Rangfolge.
 
         Args:
             source_objektart: Die Quell-OBJEKTART
-            threshold: Minimaler B1-Wert fuer Relevanz
+            threshold: Minimaler Assoziationswert fuer Relevanz
             max_categories: Maximale Anzahl Kategorien
 
         Returns:
-            Liste von (objektart, b1_wert) Tupeln, absteigend sortiert nach B1
+            Liste von (objektart, wert) Tupeln, absteigend sortiert
         """
         if source_objektart not in self.matrix.index:
             return []

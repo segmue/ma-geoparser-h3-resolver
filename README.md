@@ -1,37 +1,30 @@
 # geoparser-h3-resolver
 
-A [geoparser](https://github.com/dguzh/geoparser) resolver plugin that uses H3 spatial context to disambiguate toponyms. Instead of simple admin-hierarchy descriptions, it generates spatially informed sentences for the sentence-transformer model.
+Resolver plugin for [geoparser](https://github.com/dguzh/geoparser). It describes each candidate by nearby gazetteer objects, chosen via category associations estimated on an H3 grid.
 
-**Default output:**
-`Matterhorn (Alpiner Gipfel) in Zermatt, Wallis, Wallis`
-
-**This plugin:**
-`Alpiner Gipfel "Matterhorn" bei Zmuttgrat, Hoernligrat (Grat); Theodulstrasse (Strasse). in Zermatt (Gemeinde), Wallis (Kanton)`
-
-## How it works
-
-1. **Build pipeline** (`spatial-h3-build`): Reads geometries from geoparser's SpatiaLite DB, converts them to H3 cells via [h3-multi-resolution-index](link), and computes spatial association matrices (B1/NPMI) between OBJEKTART categories.
-2. **Sentence generator**: For each candidate toponym, finds spatially overlapping features and builds a descriptive sentence using association-ranked categories (dynamic context) and fixed slots like Gemeinde/Kanton (static context).
-3. **Resolver** (`SpatialSentenceResolver`): Plugs into geoparser as a drop-in `SentenceTransformerResolver` — overrides `_generate_description()` with the spatial sentence generator.
-
-## Usage
-
-```python
-from geoparser import Geoparser, SpacyRecognizer
-from geoparser_h3_resolver import SpatialSentenceResolver
-
-resolver = SpatialSentenceResolver(gazetteer_name="swissnames3d")
-gp = Geoparser(recognizer=SpacyRecognizer(), resolver=resolver)
-docs = gp.parse("Das Matterhorn liegt in den Walliser Alpen.")
-```
+- Default: `Säntis (Alpiner Gipfel) in Schwende-Rüte, Hinterland, Appenzell Ausserrhoden`
+- Plugin: `Säntis, Alpiner Gipfel, bei Alpstein, Massiv, Flis und Säntis-Nordwand, Gebiet, Obertoggenburg und Toggenburg, Landschaftsname, in Schwende-Rüte, Gemeinde, Hundwil, Gemeinde, Hinterland, Bezirk, Appenzell Ausserrhoden, Kanton`
 
 ## Setup
 
 ```bash
 poetry install
-poetry run spatial-h3-build              # builds DuckDB + association matrices
+poetry run spatial-h3-build               # H3 index + B1 matrix (overlap)
+poetry run spatial-h3-assoc --measure d1  # optional: D1 matrix (adjacency)
 ```
 
-## Dependencies
+## Usage
 
-geoparser, h3-multi-resolution-index, appdirs, pandas, numpy, pyyaml
+```python
+from geoparser import Geoparser
+from geoparser.modules import SpacyRecognizer
+from geoparser_h3_resolver import SpatialSentenceResolver
+
+gp = Geoparser(recognizer=SpacyRecognizer(model_name="de_core_news_sm"),
+               resolver=SpatialSentenceResolver())
+docs = gp.parse("Der Säntis liegt im Alpstein.")
+```
+
+## Configuration
+
+`geoparser_h3_resolver/configs/swissnames3d.yaml`: association measure (`association.measure: b1 | d1`) and sentence generator parameters.

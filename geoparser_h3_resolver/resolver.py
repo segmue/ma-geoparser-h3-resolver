@@ -6,7 +6,8 @@ um statt einfacher Admin-Hierarchie-Beschreibungen raeumlich-informierte Saetze
 basierend auf H3 Spatial Associations zu generieren.
 
 Verwendung:
-    from geoparser import Geoparser, SpacyRecognizer
+    from geoparser import Geoparser
+    from geoparser.modules import SpacyRecognizer
     from geoparser_h3_resolver import SpatialSentenceResolver
 
     # Default (bundled swissnames3d config):
@@ -16,7 +17,7 @@ Verwendung:
     resolver = SpatialSentenceResolver(config_path="/path/to/my_config.yaml")
 
     gp = Geoparser(recognizer=SpacyRecognizer(), resolver=resolver)
-    docs = gp.parse("Das Matterhorn liegt in den Walliser Alpen.")
+    docs = gp.parse("Der Säntis liegt im Alpstein.")
 """
 
 from pathlib import Path
@@ -38,11 +39,10 @@ class SpatialSentenceResolver(SentenceTransformerResolver):
     """Resolver mit H3-basierter raeumlicher Kontextgenerierung.
 
     Generiert Beschreibungen wie:
-        Alpiner Gipfel "Matterhorn" bei Zmuttgrat, Hoernligrat (Grat);
-        Theodulstrasse (Strasse). In Zermatt (Gemeinde), Wallis (Kanton)
+        Säntis, Alpiner Gipfel, bei Alpstein, Massiv, Flis und Säntis-Nordwand, Gebiet, Obertoggenburg und Toggenburg, Landschaftsname, in Schwende-Rüte, Gemeinde, Hundwil, Gemeinde, Hinterland, Bezirk, Appenzell Ausserrhoden, Kanton
 
     Statt der einfachen Beschreibung:
-        Matterhorn (Alpiner Gipfel) in Zermatt, Wallis, Wallis
+        Säntis (Alpiner Gipfel) in Schwende-Rüte, Hinterland, Appenzell Ausserrhoden
     """
 
     def __init__(
@@ -116,21 +116,42 @@ class SpatialSentenceResolver(SentenceTransformerResolver):
 
         self._engine = H3Engine(resolved_duckdb)
 
-        # SentenceGeneratorConfig bestimmen
+        # SentenceGeneratorConfig bestimmen. Welche Matrix gelesen wird, haengt
+        # am konfigurierten Assoziationsmass (association.measure) bzw. an einem
+        # explizit gesetzten association.matrix_path.
         if sentence_config is not None:
             resolved_sentence_config = sentence_config
         elif build_config is not None:
-            matrix_path = resolved_duckdb.parent / "b1_matrix.csv"
+            matrix_path = build_config.resolve_matrix_path(resolved_duckdb.parent)
             resolved_sentence_config = build_config.to_sentence_generator_config(matrix_path)
         else:
             matrix_path = resolved_duckdb.parent / "b1_matrix.csv"
             resolved_sentence_config = SentenceGeneratorConfig.default_swissnames(matrix_path)
 
+        self._require_matrix(resolved_sentence_config)
         self._generator = CandidateSentenceGenerator(self._engine, resolved_sentence_config)
         self._uuid_cache: dict[str, tuple[int, str, str] | None] = {}
         # (text, method, tiers) -> Kandidatenliste; Gazetteer-Suche ist
         # deterministisch, wiederholte Toponyme kosten so nur einen Dict-Lookup.
         self._search_cache: dict[tuple[str, str, int], list] = {}
+
+    @staticmethod
+    def _require_matrix(sentence_config: SentenceGeneratorConfig) -> None:
+        """Prueft die Assoziationsmatrix, bevor der erste Satz gebaut wird.
+
+        Ohne diese Pruefung faellt eine fehlende Matrix erst in
+        _generate_description() auf — und wird dort vom except-Zweig
+        stillschweigend in die Admin-Hierarchie-Beschreibung uebersetzt. Ein
+        ganzer Lauf saehe dann aus wie ein Lauf mit dem Default-Resolver.
+        """
+        matrix_path = sentence_config.get_matrix_path()
+        if not Path(matrix_path).exists():
+            befehl = ("spatial-h3-assoc --measure d1"
+                      if sentence_config.measure == "d1" else "spatial-h3-build")
+            raise FileNotFoundError(
+                f"Assoziationsmatrix fuer Mass '{sentence_config.measure}' nicht "
+                f"gefunden: {matrix_path}\nZuerst '{befehl}' ausfuehren."
+            )
 
     def _generate_description(self, candidate) -> str:
         """Override: Generiert raeumlich-informierte Beschreibung.

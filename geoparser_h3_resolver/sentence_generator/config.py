@@ -29,17 +29,25 @@ class SentenceGeneratorConfig:
     """Konfiguration fuer die Satzgenerierung.
 
     Attributes:
-        assoc_threshold: Minimaler B1-Wert fuer relevante Kategorien
+        measure: Name des Assoziationsmasses, aus dem matrix_path stammt —
+            'b1' (Ueberlagerungsmass, Default) oder 'd1' (Adjazenzmass).
+            Rein beschreibend: gelesen wird immer die Datei unter matrix_path.
+        assoc_threshold: Minimaler Assoziationswert fuer relevante Kategorien
         max_slots: Maximale Anzahl Slots (distinct UUIDs) im Satz gesamt
         max_slots_per_category: Maximale Slots (distinct UUIDs) pro Kategorie
         max_categories: Maximale Anzahl Kategorien zu beruecksichtigen
+        slot_allocation: Strategie der Slot-Vergabe auf die assoziierten
+            Kategorien — 'greedy' (Default, bisheriges Verhalten: obere
+            Kategorien zuerst bis zum Budget) oder 'proportional' (Anteile
+            nach Assoziationsgewicht, siehe allocation.py)
         static_slots: Liste von festen Slots (nach OBJEKTART)
-        matrix_path: Pfad zur B1 Matrix CSV (optional)
+        matrix_path: Pfad zur Assoziationsmatrix-CSV (optional)
         category_separator: Trennzeichen zwischen Kategorien im Satz
         instance_separator: Trennzeichen zwischen Instanzen einer Kategorie
     """
 
-    # Association thresholds
+    # Association
+    measure: str = "b1"
     assoc_threshold: float = 0.001
 
     # Slot allocation
@@ -47,6 +55,7 @@ class SentenceGeneratorConfig:
     max_slots_per_category: int = 5
     max_categories: int = 10
     max_filler_slots: int = 0
+    slot_allocation: str = "greedy"
 
     # Static slots (ersetzt static_datasets)
     static_slots: List[StaticSlotConfig] = field(default_factory=list)
@@ -60,12 +69,13 @@ class SentenceGeneratorConfig:
     instance_separator: str = ", "
 
     def get_matrix_path(self) -> Path:
-        """Gibt den Pfad zur B1 Matrix zurueck."""
+        """Gibt den Pfad zur Assoziationsmatrix zurueck."""
         if self.matrix_path:
             return self.matrix_path
         raise FileNotFoundError(
             "matrix_path nicht gesetzt. Bitte SentenceGeneratorConfig mit "
-            "matrix_path initialisieren oder spatial-h3-build ausfuehren."
+            "matrix_path initialisieren oder spatial-h3-build ausfuehren "
+            "(D1: spatial-h3-assoc --measure d1)."
         )
 
     @classmethod

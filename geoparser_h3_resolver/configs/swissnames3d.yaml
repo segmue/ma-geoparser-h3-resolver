@@ -21,6 +21,32 @@ max_resolution: 13
 containment_mode: overlap
 
 # -----------------------------------------------------------------------------
+# Assoziation: welches Mass der Resolver liest und womit es gerechnet wird
+# -----------------------------------------------------------------------------
+# measure: b1 = Ueberlagerungsmass (Default), aus der Ueberlagerung der
+#               H3-Zellmengen; entsteht in Step 4 von spatial-h3-build.
+#          d1 = Adjazenzmass, aus H3-Ringraengen; entsteht mit
+#               'spatial-h3-assoc --measure d1'.
+# Gelesen wird <measure>_matrix.csv neben der DuckDB; matrix_path setzt einen
+# abweichenden Pfad und schlaegt damit measure.
+association:
+  measure: b1
+  matrix_path: null
+
+  b1:
+    total_area_resolution: 10   # Aufloesung der Gesamtflaeche (Nenner von p_a)
+
+  d1:
+    r_star: 10                  # Ankeraufloesung
+    cap: 99999                  # Stichprobenzellen je Objekt (Wert des
+                                # berichteten Laufs; deckelt faktisch nichts)
+    k: 10                       # Distanzraenge (gekoppelt an max_slots)
+    d_max: 12                   # Suchradius in Ringschritten
+    batch: 40000                # Quellzellen je Rechenblock (nur Laufzeit)
+    threads: 4
+    named_only: true            # nur Objekte mit NAME und OBJEKTART
+
+# -----------------------------------------------------------------------------
 # Static Slots: feste Slots im generierten Satz nach OBJEKTART
 # -----------------------------------------------------------------------------
 # OBJEKTART-Werte stammen direkt aus der Geoparser-DB.
@@ -41,11 +67,12 @@ static_slots:
 # Sentence Generator Parameter
 # -----------------------------------------------------------------------------
 sentence_generator:
-  assoc_threshold: 0.001
+  assoc_threshold: 0.001        # Mindestwert einer Kategorie (wirkt vor der Sortierung)
   max_slots: 10
   max_slots_per_category: 5
-  max_categories: 10
+  max_categories: 10            # Kappung der geordneten Liste (wirkt danach)
   max_filler_slots: 0
+  slot_allocation: greedy       # greedy | proportional
 
 # -----------------------------------------------------------------------------
 # Output

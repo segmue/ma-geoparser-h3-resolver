@@ -3,15 +3,16 @@ CandidateSentenceGenerator - Generiert beschreibende Saetze fuer Gazetteer-Featu
 
 Zwei-Phasen-Generierung:
   Phase 1: Static Context (z.B. Gemeinde, Kanton) — fixe Slots nach OBJEKTART
-  Phase 2: Dynamic Context (via B1 Association Matrix) — proportionale Slot-Vergabe
+  Phase 2: Dynamic Context (via Assoziationsmatrix) — Slot-Vergabe nach Strategie
 
 Beispiel-Output:
-    Alpiner Gipfel "Matterhorn" in Zermatt (Gemeinde), Wallis (Kanton). Bei Zmuttgrat (Grat); Theodulstrasse (Strasse)
+    Säntis, Alpiner Gipfel, bei Alpstein, Massiv, Flis und Säntis-Nordwand, Gebiet, Obertoggenburg und Toggenburg, Landschaftsname, in Schwende-Rüte, Gemeinde, Hundwil, Gemeinde, Hinterland, Bezirk, Appenzell Ausserrhoden, Kanton
 """
 
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple, TYPE_CHECKING
 
+from .allocation import allocate
 from .config import SentenceGeneratorConfig
 from .association_loader import AssociationMatrixLoader
 from .templates import SentenceTemplate
@@ -59,7 +60,7 @@ class CandidateSentenceGenerator:
 
     Algorithmus:
     1. Static Context: Pro konfiguriertem Dataset die ueberlappenden Features finden
-    2. Dynamic Context: Relevante Kategorien aus B1-Matrix, Slots proportional verteilen
+    2. Dynamic Context: Relevante Kategorien aus der Assoziationsmatrix, Slots verteilen
     3. EINE Query fuer alle dynamischen Kategorien via h3_lookup Index
     4. Ergebnisse nach Slots aufteilen
     5. Satz aus Template bauen
@@ -71,7 +72,7 @@ class CandidateSentenceGenerator:
         engine = H3Engine("data/spatial_h3.duckdb")
         generator = CandidateSentenceGenerator(engine)
 
-        feature = FeatureInput(feature_id=123, name="Matterhorn", objektart="Alpiner Gipfel")
+        feature = FeatureInput(feature_id=123, name="Säntis", objektart="Alpiner Gipfel")
         result = generator.generate(feature)
         print(result.sentence)
     """
@@ -182,13 +183,13 @@ class CandidateSentenceGenerator:
         self,
         feature: FeatureInput,
     ) -> Tuple[Dict[str, List[str]], Dict[str, List[str]]]:
-        """Findet dynamischen Kontext via B1 Association Matrix + Filler.
+        """Findet dynamischen Kontext via Assoziationsmatrix + Filler.
 
         Returns:
             Tuple von (association_context, filler_context)
             Beide sind Dict von {OBJEKTART: [Namen]}
         """
-        # 1. Assoziierte Kategorien aus B1-Matrix holen
+        # 1. Assoziierte Kategorien aus der Assoziationsmatrix holen
         associated = self._assoc_loader.get_associated_categories(
             source_objektart=feature.objektart,
             threshold=self.config.assoc_threshold,
@@ -197,7 +198,7 @@ class CandidateSentenceGenerator:
 
         # Static-Slot-OBJEKTARTs ausschliessen (werden separat behandelt)
         exclude_objektarts = {s.objektart for s in self.config.static_slots}
-        associated = [(cat, b1) for cat, b1 in associated
+        associated = [(cat, weight) for cat, weight in associated
                       if cat not in exclude_objektarts]
 
         context_by_category: Dict[str, List[str]] = {}
@@ -215,27 +216,36 @@ class CandidateSentenceGenerator:
             except Exception:
                 results_df = None
 
-            # 3. Ergebnisse befuellen + ungenutzte Slots umverteilen
+            # 3. Slots vergeben (Strategie: config.slot_allocation), dann befuellen
             if results_df is not None and not results_df.empty:
-                remaining_slots = self.config.max_slots
-                max_per_cat = self.config.max_slots_per_category
                 uuid_field = self.config.uuid_field
 
+                by_cat = {}
+                available = {}
                 for objektart, _ in associated:
-                    if remaining_slots <= 0:
-                        break
-                    slots = min(max_per_cat, remaining_slots)
+                    cat_df = results_df[results_df["OBJEKTART"] == objektart]
+                    by_cat[objektart] = cat_df
+                    available[objektart] = 0 if cat_df.empty else len(cat_df[uuid_field].unique())
 
-                    mask = results_df["OBJEKTART"] == objektart
-                    cat_df = results_df[mask]
-                    if not cat_df.empty:
-                        unique_uuids = cat_df[uuid_field].unique()[:slots]
-                        selected = cat_df[cat_df[uuid_field].isin(unique_uuids)]
-                        names = selected["NAME"].tolist()
-                        if names:
-                            context_by_category[objektart] = names
-                            used_feature_ids.extend(selected["feature_id"].tolist())
-                            remaining_slots -= len(unique_uuids)
+                slots_by_cat = allocate(
+                    associated,
+                    available,
+                    self.config.max_slots,
+                    self.config.max_slots_per_category,
+                    mode=self.config.slot_allocation,
+                )
+
+                for objektart, _ in associated:
+                    n = slots_by_cat.get(objektart, 0)
+                    if n <= 0:
+                        continue
+                    cat_df = by_cat[objektart]
+                    unique_uuids = cat_df[uuid_field].unique()[:n]
+                    selected = cat_df[cat_df[uuid_field].isin(unique_uuids)]
+                    names = selected["NAME"].tolist()
+                    if names:
+                        context_by_category[objektart] = names
+                        used_feature_ids.extend(selected["feature_id"].tolist())
 
         # 4. Verbleibende Slots mit kleinsten intersecting Features auffuellen
         filler_by_category: Dict[str, List[str]] = {}
@@ -273,25 +283,26 @@ class CandidateSentenceGenerator:
 
     def _allocate_slots(
         self,
-        associated: List[Tuple[str, float]]
+        associated: List[Tuple[str, float]],
+        available: Optional[Dict[str, int]] = None,
     ) -> Dict[str, int]:
-        """Verteilt Instanz-Slots proportional nach Assoziationsstaerke."""
-        if not associated:
-            return {}
+        """Slot-Vergabe nach der konfigurierten Strategie.
 
-        total_slots = self.config.max_slots
-        max_per_cat = self.config.max_slots_per_category
-
-        total_weight = sum(b1 for _, b1 in associated)
-        if total_weight <= 0:
-            return {}
-
-        allocation = {}
-        for cat, b1 in associated:
-            raw = (b1 / total_weight) * total_slots
-            allocation[cat] = min(max_per_cat, max(0, int(round(raw))))
-
-        return allocation
+        Duenner Wrapper um allocation.allocate; die eigentliche Logik und ihre
+        Tests liegen dort. `available` ist die Zahl tatsaechlich vorhandener
+        Instanzen je Kategorie; ohne Angabe wird unbegrenzte Verfuegbarkeit
+        angenommen (nur fuer Inspektion/Debugging sinnvoll).
+        """
+        if available is None:
+            available = {cat: self.config.max_slots_per_category
+                         for cat, _ in associated}
+        return allocate(
+            associated,
+            available,
+            self.config.max_slots,
+            self.config.max_slots_per_category,
+            mode=self.config.slot_allocation,
+        )
 
     def get_available_categories(self) -> List[str]:
         """Gibt alle verfuegbaren OBJEKTART-Kategorien zurueck."""
